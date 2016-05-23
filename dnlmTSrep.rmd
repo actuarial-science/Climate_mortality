@@ -1,0 +1,66 @@
+---
+title: "Reproduce dlnmTS"
+author: "Paul"
+date: "24 February 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Reproduction of calculations in the dnlmTS vignette
+This document is a replication of the code included in part of the [time series vignette](https://cran.r-project.org/web/packages/dlnm/vignettes/dlnmTS.pdf) for the R package dlnm. DLNM stands for _Distributed Lag Non-linear Models_. More information about the package is available [here](https://cran.r-project.org/web/packages/dlnm/index.html).
+
+I've included very little commentary, you will need to read the vignette itself alongside this. The main purpose is to show the process of constructing something that pulls together code, output (including graphics), and textual narrative into a single document that can be easily modified and re-run, as well as being printed in a number of different formats. I haven't shown it here, but the output can also include properly (LaTeX) formatted equations.
+
+The parts in the grey boxes are R code. The elements beginning with "##", and the graphs, are the output of the code.
+
+Page numbers in the headings below refer to the vignette.
+
+### First look at data (Page 2:)
+```{r Page2, message=FALSE}
+library("dlnm")
+head(chicagoNMMAPS,3)
+```
+
+### Example 1, a simple DLNM (Page 3-5):
+
+Set up the cross-basis matrices:
+
+```{r Page3}
+cb1.pm <- crossbasis(chicagoNMMAPS$pm10, lag=15,
+                     argvar=list(fun="lin",cen=0),
+                     arglag=list(fun="poly",degree=4))
+cb1.temp <- crossbasis(chicagoNMMAPS$temp, lag=3,
+                       argvar=list(df=5,cen=21),
+                       arglag=list(fun="strata",breaks=1))
+summary(cb1.pm)
+```
+
+Now fit a model, make some predictions, and plot them:
+```{r Page4a, fig.show = 'hold'}
+library(splines)
+model1 <- glm(death ~ cb1.pm + cb1.temp + ns(time, 7*14) + dow,
+              family = quasipoisson(), chicagoNMMAPS)
+pred1.pm <- crosspred(cb1.pm, model1, at = 0:20, bylag = 0.2,
+                      cumul = TRUE)
+plot(pred1.pm, "slices", var = 10, col = 3, ylab = "RR",
+     ci.arg = list(density = 15,lwd = 2),
+     main = "Association with a 10-unit increase in PM10")
+plot(pred1.pm, "slices", var = 10, cumul = TRUE, 
+     ylab = "Cumulative RR",
+     main = "Cumulative association with a 10-unit increase in PM10")
+```
+
+This first graph above shows a "slice" of the full model output, i.e. predicted relative mortality risk for a particular level of PM10 concentration. The model allows for a lagged effect of the risk factor, so we can see how the effect of a particular concentration of pollutant persists into the future.
+
+There is a [Shiny Web App available](https://actsci.shinyapps.io/dlnm_app-1/) which allows you to adjust the PM10 concentration and see the results, as well as a similar graph showing the effect of different temperatures.
+
+
+The overall cumulative effect of a 10-unit increase in PM10 over 15 days of lag (including confidence limits) can be output as:
+
+```{r Page4b}
+pred1.pm$allRRfit["10"]
+cbind(pred1.pm$allRRlow, pred1.pm$allRRhigh)["10",]
+```
